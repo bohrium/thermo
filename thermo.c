@@ -12,16 +12,13 @@
 
 /*--------------------  0.0.0. thermodynamic parameters  --------------------*/ 
 
-const float avg_energy = 0.1;
-//const float density = 256.0;
-
-//const int nb_molecules = (int)density;
+const float avg_energy = 1.0;
 #define nb_molecules 256
 
 /*--------------------  0.0.1. interaction parameters  ----------------------*/ 
 
-const float delta = 0.01;  
-const float epsilon = 0.1;  
+const float delta = 0.0025;
+const float epsilon = 1.0;  
 
 const float spring = 2.0 * epsilon / (delta * delta); 
 float force_law(float dist)
@@ -31,10 +28,10 @@ float force_law(float dist)
 
 /*--------------------  0.0.2. simulation parameters  -----------------------*/ 
 
-const float dt = 0.001;
+const float dt = delta / 100;
+const float T =  5.0;
+const float print_t = 0.002;
 float t = 0.0;
-const float T = 10.0;
-const float print_t = 0.1;
 
 /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ~~~~~~~~~~~~~~  0.1. Simulation State  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
@@ -54,7 +51,7 @@ void update_positions();
 void accumulate_forces();
 void update_momenta(); 
 void print_state(); 
-void print_histogram();
+void print_histogram(int offset);
 
 void main()
 {
@@ -67,18 +64,17 @@ void main()
         reset_forces();
         reset_forces();
         accumulate_forces();
-        //print_state();
-        print_histogram();
     }
     for ( t = 0.0; t < T; t += dt ) {
+        if ( floor((t + dt)/print_t) != floor(t/print_t) ) {
+            print_state();
+            print_histogram(110);
+        }
         reset_forces();
         update_positions(); 
         accumulate_forces();
         update_momenta(); 
 
-        if ( floor((t + dt)/print_t) == floor(t/print_t) ) { continue; }
-        //print_state();
-        print_histogram();
     }
 
     printf("bye!\n");
@@ -102,8 +98,8 @@ void init_state()
     float p_scale = sqrt(2.0 * avg_energy); 
     for ( int i=0; i!=2; ++i ) {
         for ( int j=0; j!=nb_molecules; ++j ) {
-            q[i][j] = unif() * 0.5 + 0.25;
-            p[i][j] = (i==0) ? 0 : (p_scale*coin());
+            q[i][j] = unif() * 0.1 + 0.45;
+            p[i][j] = (i==0) ? 0.0 : p_scale * coin();
         }
     }
 }
@@ -160,7 +156,7 @@ void update_momenta()
 /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ~~~~~~~~~~~~~~  2.2. Display  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-#define GRIDSIZE 20
+#define GRIDSIZE 50 
 void print_state()
 {
     int grid[GRIDSIZE][GRIDSIZE]; 
@@ -191,11 +187,14 @@ void print_state()
         }
         printf("|\n");
     }
+    for ( int r=0; r!=GRIDSIZE+1; ++r ) {
+        printf("\033[1A");
+    }
 }
 
-#define HIST_MAX    1.0  
+#define HIST_MAX    3.0  
 #define NB_BINS     20  
-void print_histogram()
+void print_histogram(int offset)
 {
     int grid[NB_BINS];
     for ( int r=0; r!=NB_BINS; ++r ) {
@@ -208,17 +207,24 @@ void print_histogram()
         grid[bin] += 1;
     }
 
+    for ( int c=0; c!=offset; ++c ) { printf("\033[1C"); }
     for ( int c=0; c!=30; ++c ) { printf("="); }
     printf("  SPEED  at time %.4f  ", t);
     for ( int c=0; c!=30; ++c ) { printf("="); }
-    printf("\n");
+    printf("\n"); 
+
     for ( int r=0; r!=NB_BINS; ++r ) {
+        for ( int c=0; c!=offset; ++c ) { printf("\033[1C"); }
         printf("|%.2f|", (HIST_MAX * r)/NB_BINS);
-        for ( int c=0; c!=grid[r]; ++c ) {
+        int c = 0;
+        for ( ; c!=grid[r]; ++c ) {
             printf("-");
+            if ( c == 80  ) { printf("*"); break; }
         }
+        for ( ; c!= 85; ++c ) { printf(" "); }
         printf("\n");
     }
+    for ( int r=0; r!=NB_BINS+1; ++r ) {
+        printf("\033[1A");
+    }
 }
-
-
