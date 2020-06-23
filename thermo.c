@@ -13,12 +13,12 @@
 /*--------------------  0.0.0. thermodynamic parameters  --------------------*/ 
 
 const float avg_energy = 0.1;
-#define nb_molecules 256
+#define nb_molecules 512  
 
 /*--------------------  0.0.1. interaction parameters  ----------------------*/ 
 
-const float delta = 0.005;  
-const float epsilon = 0.1;  
+const float delta = 0.015;   
+const float epsilon = 1.0;  
 
 const float spring = 2.0 * epsilon / (delta * delta); 
 float force_law(float dist)
@@ -29,9 +29,10 @@ float force_law(float dist)
 /*--------------------  0.0.2. simulation parameters  -----------------------*/ 
 
 const float dt = delta / 100;
-const float T = 50.0;
-const float print_t = 0.03;   
+const float T = 5000.0;
+const float print_t = 0.01;   
 float t = 0.0;
+float animation_rate = 0.2;
 
 /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ~~~~~~~~~~~~~~  0.1. Simulation State  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
@@ -80,7 +81,7 @@ void main()
         accumulate_forces();
         update_momenta(); 
 
-        while ( clock() < start + (int)(CLOCKS_PER_SEC * t) ) {}
+        while ( clock() < start + (int)(CLOCKS_PER_SEC * t / animation_rate) ) {}
     }
 
     printf("bye!\n");
@@ -247,8 +248,8 @@ void print_state()
     }
 }
 
-#define HIST_MAX    1.0  
-#define NB_BINS     50  
+#define HIST_MAX    2.0  
+#define NB_BINS     50
 void print_histogram(int offset)
 {
     int grid[NB_BINS];
