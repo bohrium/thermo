@@ -16,7 +16,7 @@ const float avg_energy = 0.1;
 //const float density = 256.0;
 
 //const int nb_molecules = (int)density;
-#define nb_molecules 64
+#define nb_molecules 256
 
 /*--------------------  0.0.1. interaction parameters  ----------------------*/ 
 
@@ -32,7 +32,9 @@ float force_law(float dist)
 /*--------------------  0.0.2. simulation parameters  -----------------------*/ 
 
 const float dt = 0.001;
-const float T = 1.0;
+float t = 0.0;
+const float T = 10.0;
+const float print_t = 0.1;
 
 /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ~~~~~~~~~~~~~~  0.1. Simulation State  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
@@ -52,6 +54,7 @@ void update_positions();
 void accumulate_forces();
 void update_momenta(); 
 void print_state(); 
+void print_histogram();
 
 void main()
 {
@@ -64,13 +67,18 @@ void main()
         reset_forces();
         reset_forces();
         accumulate_forces();
+        //print_state();
+        print_histogram();
     }
-    for ( float t = 0.0; t < T; t += dt ) {
-        print_state();
+    for ( t = 0.0; t < T; t += dt ) {
         reset_forces();
         update_positions(); 
         accumulate_forces();
         update_momenta(); 
+
+        if ( floor((t + dt)/print_t) == floor(t/print_t) ) { continue; }
+        //print_state();
+        print_histogram();
     }
 
     printf("bye!\n");
@@ -155,7 +163,7 @@ void update_momenta()
 #define GRIDSIZE 20
 void print_state()
 {
-    char grid[GRIDSIZE][GRIDSIZE]; 
+    int grid[GRIDSIZE][GRIDSIZE]; 
     for ( int r=0; r!=GRIDSIZE; ++r ) {
         for ( int c=0; c!=GRIDSIZE; ++c ) {
             grid[r][c] = 0;
@@ -182,6 +190,34 @@ void print_state()
                 grid[r][c] == 2 ? '8' : '%' );
         }
         printf("|\n");
+    }
+}
+
+#define HIST_MAX    1.0  
+#define NB_BINS     20  
+void print_histogram()
+{
+    int grid[NB_BINS];
+    for ( int r=0; r!=NB_BINS; ++r ) {
+        grid[r] = 0;
+    }
+
+    for ( int j = 0; j!=nb_molecules; ++j ) {
+        float speed = sqrt(p[0][j]*p[0][j] + p[1][j]*p[1][j]);
+        int bin = (speed/HIST_MAX) * NB_BINS;  if ( NB_BINS <= bin ) { bin = NB_BINS-1; }
+        grid[bin] += 1;
+    }
+
+    for ( int c=0; c!=30; ++c ) { printf("="); }
+    printf("  SPEED  at time %.4f  ", t);
+    for ( int c=0; c!=30; ++c ) { printf("="); }
+    printf("\n");
+    for ( int r=0; r!=NB_BINS; ++r ) {
+        printf("|%.2f|", (HIST_MAX * r)/NB_BINS);
+        for ( int c=0; c!=grid[r]; ++c ) {
+            printf("-");
+        }
+        printf("\n");
     }
 }
 
