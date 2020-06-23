@@ -74,7 +74,7 @@ void main()
     for ( t = 0.0; t < T; t += dt ) {
         if ( floor((t + dt)/print_t) != floor(t/print_t) ) {
             print_state();
-            print_histogram(210);
+            print_histogram(110);
         }
         reset_forces();
         update_positions(); 
@@ -212,38 +212,42 @@ void accumulate_forces_inner(int* selves, int nb_selves, int* others, int nb_oth
 /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ~~~~~~~~~~~~~~  2.3. Display  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-#define GRIDSIZE 100
+#define GRIDSIZE (2*50)
 void print_state()
 {
     int grid[GRIDSIZE][2*GRIDSIZE]; 
     for ( int r=0; r!=GRIDSIZE; ++r ) {
-        for ( int c=0; c!=2*GRIDSIZE; ++c ) {
+        for ( int c=0; c!=GRIDSIZE; ++c ) {
             grid[r][c] = 0;
         }
     }
 
     for ( int j = 0; j!=nb_molecules; ++j ) {
         int r = (int)(q[0][j] * ((float)GRIDSIZE-0.01));
-        int c = (int)(q[1][j] * (2*(float)GRIDSIZE-0.01));
+        int c = (int)(q[1][j] * ((float)GRIDSIZE-0.01));
         grid[r][c] += 1;
     }
 
     printf(" ");
-    for ( int c=0; c!=2*GRIDSIZE+1; ++c ) {
+    for ( int c=0; c!=GRIDSIZE+1; ++c ) {
         printf("_");
     }
     printf(" \n");
-    for ( int r=0; r!=GRIDSIZE; ++r ) {
+    for ( int r=0; r!=GRIDSIZE; r+=2 ) {
         printf("| ");
-        for ( int c=0; c!=2*GRIDSIZE; ++c ) {
-            printf("%c",
-                grid[r][c] == 0 ? ' ' :
-                grid[r][c] == 1 ? 'o' :     
-                grid[r][c] == 2 ? '8' : '%' );
+        for ( int c=0; c!=GRIDSIZE; ++c ) {
+            printf("%s",
+                grid[r][c] ? ( grid[r+1][c] ? ":" : "\u02d9")
+                           : ( grid[r+1][c] ? "." : " " )
+            );
+            //printf("%c",
+            //    grid[r][c] == 0 ? ' ' :
+            //    grid[r][c] == 1 ? 'o' :     
+            //    grid[r][c] == 2 ? '8' : '%' );
         }
         printf("|\n");
     }
-    for ( int r=0; r!=GRIDSIZE+1; ++r ) {
+    for ( int r=0; r!=GRIDSIZE/2+1; ++r ) {
         printf("\033[1A");
     }
 }
