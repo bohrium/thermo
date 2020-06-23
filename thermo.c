@@ -17,8 +17,8 @@ const float avg_energy = 0.1;
 
 /*--------------------  0.0.1. interaction parameters  ----------------------*/ 
 
-const float delta = 0.015;   
-const float epsilon = 1.0;  
+const float delta = 0.005;   
+const float epsilon = 0.5;  
 
 const float spring = 2.0 * epsilon / (delta * delta); 
 float force_law(float dist)
@@ -105,7 +105,7 @@ void init_state()
     float p_scale = sqrt(2.0 * avg_energy); 
     for ( int i=0; i!=2; ++i ) {
         for ( int j=0; j!=nb_molecules; ++j ) {
-            q[i][j] = unif()*0.8 + 0.1;
+            q[i][j] = (i==0) ? unif()*0.4 + 0.3 : unif();
             p[i][j] = (i==0) ? 0.0 : p_scale * coin();
             //p[i][j] = p_scale * coin();
         }
