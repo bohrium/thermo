@@ -1,3 +1,15 @@
+/*  author: samtenka
+ *  change: 2020-06-23
+ *  create: 2020-06-22
+ *  descrp: Simulation of a gas with very short-range interactions.
+ *  to use: Run `make all`, then run `./out.o`.  Two displays will appear in
+ *          the terminal: to the left, a large square with moving dots
+ *          representing the Particle locations; to the right, a histogram of
+ *          speeds, showing both Measurement and equilibrium-theory.  Observe
+ *          how the system equilibrates With time.  One may change the
+ *          hardcoded hyperparameters in the Hyperparameters section below.
+ */
+
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,11 +25,11 @@
 /*--------------------  0.0.0. thermodynamic parameters  --------------------*/ 
 
 const float avg_energy = 0.1;
-#define nb_molecules 128
+#define nb_molecules 512  
 
 /*--------------------  0.0.1. interaction parameters  ----------------------*/ 
 
-const float delta = 0.005;   
+const float delta = 0.001;   
 const float epsilon = 0.5;  
 
 const float spring = 2.0 * epsilon / (delta * delta); 
@@ -28,11 +40,11 @@ float force_law(float dist)
 
 /*--------------------  0.0.2. simulation parameters  -----------------------*/ 
 
-const float dt = delta / 100;
+const float dt = delta / 25; 
 const float T = 5000.0;
-const float print_t = 0.01;   
+const float print_t = 0.04;   
 float t = 0.0;
-float animation_rate = 0.2;
+float animation_rate = 1.0 ;
 
 /*--------------------  0.0.3. display parameters  --------------------------*/ 
 
@@ -40,13 +52,16 @@ float animation_rate = 0.2;
 
 #define HIST_MAX    1.25 
 #define NB_BINS     25
+int hist_meas[NB_BINS];
+float hist_pred[NB_BINS];
 
 /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ~~~~~~~~~~~~~~  0.1. Simulation State  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-#define KDSIZE 16 
+#define KDSIZE 32
+int indices[nb_molecules];
 int lengths[KDSIZE][KDSIZE];
-int items[KDSIZE][KDSIZE][nb_molecules];
+int offsets[KDSIZE][KDSIZE];
 
 float q[2][nb_molecules]; 
 float p[2][nb_molecules]; 
@@ -63,13 +78,21 @@ void update_positions();
 void accumulate_forces();
 void update_momenta(); 
 void print_state(); 
-void print_histogram(int offset);
+void measure_histogram();
+void predict_histogram();
+void print_histogram(int offset, float scale);
 
 void main()
 {
     srand(time(0));
 
     printf("hi!\n");
+    if ( 1.0/KDSIZE < delta ) {
+        printf(" UH OH! \n");
+        exit(0);
+    }
+
+    predict_histogram();
 
     {
         init_state();
@@ -81,7 +104,8 @@ void main()
     for ( t = 0.0; t < T; t += dt ) {
         if ( floor((t + dt)/print_t) != floor(t/print_t) ) {
             print_state();
-            print_histogram(105);
+            measure_histogram();
+            print_histogram(GRIDSIZE+5, nb_molecules/256.0);
         }
         reset_forces();
         update_positions(); 
@@ -153,17 +177,34 @@ void update_momenta()
 
 void assign_to_kd() 
 {
+    int visited[KDSIZE][KDSIZE];
+
     for ( int r=0; r!=KDSIZE; ++r ) {
         for ( int c=0; c!=KDSIZE; ++c ) {
             lengths[r][c] = 0;
+            visited[r][c] = 0;
         }
     }
 
     for ( int j = 0; j!=nb_molecules; ++j ) {
         int r = (int)(q[0][j] * ((float)KDSIZE-0.0001));
         int c = (int)(q[1][j] * ((float)KDSIZE-0.0001));
-        items[r][c][lengths[r][c]] = j;
         lengths[r][c] += 1;
+    }
+
+    int accum = 0;
+    for ( int r=0; r!=KDSIZE; ++r ) {
+        for ( int c=0; c!=KDSIZE; ++c ) {
+            offsets[r][c] = accum;
+            accum += lengths[r][c]; 
+        }
+    }
+
+    for ( int j = 0; j!=nb_molecules; ++j ) {
+        int r = (int)(q[0][j] * ((float)KDSIZE-0.0001));
+        int c = (int)(q[1][j] * ((float)KDSIZE-0.0001));
+        indices[offsets[r][c] + visited[r][c]] = j;
+        visited[r][c] += 1;
     }
 }
 
@@ -183,12 +224,12 @@ void accumulate_forces()
                     int rr = (r+dr+KDSIZE) % KDSIZE;
                     int cc = (c+dc+KDSIZE) % KDSIZE;
                     for ( int j=0; j!=lengths[rr][cc]; ++j ) {
-                        others[nb_others] = items[rr][cc][j];  
+                        others[nb_others] = indices[offsets[rr][cc] + j];
                         nb_others += 1;
                     }
                 }
             }
-            accumulate_forces_inner(items[r][c], lengths[r][c], others, nb_others);
+            accumulate_forces_inner(indices+offsets[r][c], lengths[r][c], others, nb_others);
         }
     }
 }
@@ -221,17 +262,23 @@ void accumulate_forces_inner(int* selves, int nb_selves, int* others, int nb_oth
 
 void print_state()
 {
-    int grid[GRIDSIZE][2*GRIDSIZE]; 
+    int grid_special[GRIDSIZE][GRIDSIZE]; 
+    int grid_normal[GRIDSIZE][GRIDSIZE]; 
     for ( int r=0; r!=GRIDSIZE; ++r ) {
         for ( int c=0; c!=GRIDSIZE; ++c ) {
-            grid[r][c] = 0;
+            grid_special[r][c] = 0;
+            grid_normal[r][c] = 0;
         }
     }
 
     for ( int j = 0; j!=nb_molecules; ++j ) {
-        int r = (int)(q[0][j] * ((float)GRIDSIZE-0.01));
-        int c = (int)(q[1][j] * ((float)GRIDSIZE-0.01));
-        grid[r][c] += 1;
+        int r = (int)(q[0][j] * ((float)GRIDSIZE-0.0001));
+        int c = (int)(q[1][j] * ((float)GRIDSIZE-0.0001));
+        if ( j < 8 ) {
+            grid_special[r][c] += 1;
+        } else {
+            grid_normal[r][c] += 1;
+        }
     }
 
     printf(" ");
@@ -241,16 +288,15 @@ void print_state()
     printf(" \n");
     for ( int r=0; r!=GRIDSIZE; r+=2 ) {
         printf("| ");
-        printf("\033[31m");
+        printf("\033[34m");
         for ( int c=0; c!=GRIDSIZE; ++c ) {
             printf("%s",
-                grid[r][c] ? ( grid[r+1][c] ? ":" : "\u02d9")
-                           : ( grid[r+1][c] ? "." : " " )
+                grid_special[r][c] ? ( grid_special[r+1][c] ? "\033[31m8\033[34m" : "\033[31m\u1d3c\033[34m")
+                                   : ( grid_special[r+1][c] ? "\033[31mo\033[34m" :
+                grid_normal[r][c] ? ( grid_normal[r+1][c] ? ":" : "\u02d9")
+                                  : ( grid_normal[r+1][c] ? "." : " " )
+                )
             );
-            //printf("%c",
-            //    grid[r][c] == 0 ? ' ' :
-            //    grid[r][c] == 1 ? 'o' :     
-            //    grid[r][c] == 2 ? '8' : '%' );
         }
         printf("\033[36m");
         printf("|\n");
@@ -266,50 +312,67 @@ float maxwell(float speed)
     return speed * exp(- speed*speed/(2.0*avg_energy)) / norm;
 }
 
-void print_histogram(int offset)
+void predict_histogram()
 {
-    int grid[NB_BINS];
-    for ( int r=0; r!=NB_BINS; ++r ) {
-        grid[r] = 0;
-    }
-
-    for ( int j = 0; j!=nb_molecules; ++j ) {
-        float speed = sqrt(p[0][j]*p[0][j] + p[1][j]*p[1][j]);
-        int bin = (speed/HIST_MAX) * NB_BINS;  if ( NB_BINS <= bin ) { bin = NB_BINS-1; }
-        grid[bin] += 1;
-    }
-
-    for ( int c=0; c!=offset; ++c ) { printf("\033[1C"); }
-    for ( int c=0; c!=30; ++c ) { printf("="); }
-    printf("  SPEED  at time %.4f  ", t);
-    for ( int c=0; c!=30; ++c ) { printf("="); }
-    printf("\n"); 
-
-    const int scale = 1;
-
     for ( int r=0; r!=NB_BINS; ++r ) {
         float speed_a = (HIST_MAX * (r+0.0))/NB_BINS;
         float speed_b = (HIST_MAX * (r+0.5))/NB_BINS;
         float speed_c = (HIST_MAX * (r+1.0))/NB_BINS;
-        float pred = (maxwell(speed_a)+2*maxwell(speed_b)+maxwell(speed_c))/4.0;
-        pred *= nb_molecules * ((float)HIST_MAX)/NB_BINS;
+        float prob_density = (maxwell(speed_a)+2*maxwell(speed_b)+maxwell(speed_c))/4.0;
+        float prob_mass = prob_density * nb_molecules * ((float)HIST_MAX)/NB_BINS;
+        hist_pred[r] = prob_mass;
+    }
+}
 
-        for ( int c=0; c!=offset; ++c ) { printf("\033[1C"); }
+void measure_histogram()
+{
+    for ( int r=0; r!=NB_BINS; ++r ) { hist_meas[r] = 0; }
+
+    for ( int j = 0; j!=nb_molecules; ++j ) {
+        float speed = sqrt(p[0][j]*p[0][j] + p[1][j]*p[1][j]);
+        int bin = (speed/HIST_MAX) * NB_BINS;
+        if ( NB_BINS <= bin ) { bin = NB_BINS-1; }
+        hist_meas[bin] += 1;
+    }
+}
+
+void print_many(char const* str, int times) {
+    for ( int i=0; i!=times; ++i ) { printf("%s", str); }
+} 
+
+void print_histogram(int offset, float scale)
+{
+    print_many("\033[1C", offset);
+    print_many("+", 30); printf("  SPEED  at time %.4f  ", t); print_many("+", 30); printf("\n"); 
+
+    float chi_squared = 0.0; 
+
+    for ( int r=0; r!=NB_BINS; ++r ) {
+        float speed_a = (HIST_MAX * (r+0.0))/NB_BINS;
+        print_many("\033[1C", offset);
         printf("|%.2f|", speed_a);
-        int c = 0;
-        for ( ; c!=75 && c<grid[r]/scale; ++c ) {
-            if ( c==(int)(pred / scale) ) { printf("|"); }
-            printf("=");
+
+        {
+            int c = 0;
+            for ( ; c!=75; ++c ) {
+                if      ( c==(int)(hist_pred[r]/scale) ) { printf("|"); }
+                else if ( c==(int)(hist_meas[r]/scale) ) { printf("<"); }
+                else if ( c<=(int)(hist_meas[r]/scale) ) { printf("-"); }
+                else                                     { printf(" "); }
+            }
         }
-        //if ( c==75 ) { printf("[-]"); }
-        //else if ( grid[r]%2 ) { printf("-"); }
-        for ( ; c!=80; ++c ) {
-            if ( c==(int)(pred / scale) ) { printf("|"); }
-            printf(" ");
-        }
+
         printf("\n");
+
+        float diff = ((float)(hist_meas[r]) - hist_pred[r]);
+        chi_squared += diff*diff/hist_pred[r];
     }
-    for ( int r=0; r!=NB_BINS+1; ++r ) {
-        printf("\033[1A");
-    }
+
+    print_many("\033[1C", offset);
+    printf("Chi squared is {%8.2f} (vs {%5.2f} at equilibrium)\n",
+           chi_squared, (float)NB_BINS
+    );
+    if ( chi_squared < NB_BINS ) { exit(0); }
+
+    print_many("\033[1A", NB_BINS+2);
 }
