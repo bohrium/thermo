@@ -13,7 +13,7 @@
 /*--------------------  0.0.0. thermodynamic parameters  --------------------*/ 
 
 const float avg_energy = 0.1;
-#define nb_molecules 512  
+#define nb_molecules 128
 
 /*--------------------  0.0.1. interaction parameters  ----------------------*/ 
 
@@ -23,7 +23,7 @@ const float epsilon = 0.5;
 const float spring = 2.0 * epsilon / (delta * delta); 
 float force_law(float dist)
 {
-    return (dist < delta) ? spring * dist : 0.0; 
+    return (dist < delta) ? spring * (delta-dist) : 0.0; 
 }
 
 /*--------------------  0.0.2. simulation parameters  -----------------------*/ 
@@ -33,6 +33,13 @@ const float T = 5000.0;
 const float print_t = 0.01;   
 float t = 0.0;
 float animation_rate = 0.2;
+
+/*--------------------  0.0.3. display parameters  --------------------------*/ 
+
+#define GRIDSIZE (2*50)
+
+#define HIST_MAX    1.25 
+#define NB_BINS     25
 
 /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ~~~~~~~~~~~~~~  0.1. Simulation State  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
@@ -74,7 +81,7 @@ void main()
     for ( t = 0.0; t < T; t += dt ) {
         if ( floor((t + dt)/print_t) != floor(t/print_t) ) {
             print_state();
-            print_histogram(110);
+            print_histogram(105);
         }
         reset_forces();
         update_positions(); 
@@ -103,12 +110,12 @@ float coin() { return (rand()%2) * 2 - 1; }
 void init_state()
 {
     float p_scale = sqrt(2.0 * avg_energy); 
-    for ( int i=0; i!=2; ++i ) {
-        for ( int j=0; j!=nb_molecules; ++j ) {
-            q[i][j] = (i==0) ? unif()*0.4 + 0.3 : unif();
-            p[i][j] = (i==0) ? 0.0 : p_scale * coin();
-            //p[i][j] = p_scale * coin();
-        }
+    for ( int j=0; j!=nb_molecules; ++j ) {
+        q[0][j] = unif()*0.4 + 0.3;
+        q[1][j] = unif();
+        float angle = 2*M_PI*unif();
+        p[0][j] = p_scale * sin(angle); 
+        p[1][j] = p_scale * cos(angle); 
     }
 }
 
@@ -212,7 +219,6 @@ void accumulate_forces_inner(int* selves, int nb_selves, int* others, int nb_oth
 /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ~~~~~~~~~~~~~~  2.3. Display  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-#define GRIDSIZE (2*50)
 void print_state()
 {
     int grid[GRIDSIZE][2*GRIDSIZE]; 
@@ -235,6 +241,7 @@ void print_state()
     printf(" \n");
     for ( int r=0; r!=GRIDSIZE; r+=2 ) {
         printf("| ");
+        printf("\033[31m");
         for ( int c=0; c!=GRIDSIZE; ++c ) {
             printf("%s",
                 grid[r][c] ? ( grid[r+1][c] ? ":" : "\u02d9")
@@ -245,6 +252,7 @@ void print_state()
             //    grid[r][c] == 1 ? 'o' :     
             //    grid[r][c] == 2 ? '8' : '%' );
         }
+        printf("\033[36m");
         printf("|\n");
     }
     for ( int r=0; r!=GRIDSIZE/2+1; ++r ) {
@@ -252,8 +260,12 @@ void print_state()
     }
 }
 
-#define HIST_MAX    2.0  
-#define NB_BINS     50
+float maxwell(float speed)
+{
+    float norm = avg_energy;
+    return speed * exp(- speed*speed/(2.0*avg_energy)) / norm;
+}
+
 void print_histogram(int offset)
 {
     int grid[NB_BINS];
@@ -273,15 +285,28 @@ void print_histogram(int offset)
     for ( int c=0; c!=30; ++c ) { printf("="); }
     printf("\n"); 
 
+    const int scale = 1;
+
     for ( int r=0; r!=NB_BINS; ++r ) {
+        float speed_a = (HIST_MAX * (r+0.0))/NB_BINS;
+        float speed_b = (HIST_MAX * (r+0.5))/NB_BINS;
+        float speed_c = (HIST_MAX * (r+1.0))/NB_BINS;
+        float pred = (maxwell(speed_a)+2*maxwell(speed_b)+maxwell(speed_c))/4.0;
+        pred *= nb_molecules * ((float)HIST_MAX)/NB_BINS;
+
         for ( int c=0; c!=offset; ++c ) { printf("\033[1C"); }
-        printf("|%.2f|", (HIST_MAX * r)/NB_BINS);
+        printf("|%.2f|", speed_a);
         int c = 0;
-        for ( ; c!=grid[r]; ++c ) {
-            printf("-");
-            if ( c == 75 ) { printf("[-]"); break; }
+        for ( ; c!=75 && c<grid[r]/scale; ++c ) {
+            if ( c==(int)(pred / scale) ) { printf("|"); }
+            printf("=");
         }
-        for ( ; c!= 80; ++c ) { printf(" "); }
+        //if ( c==75 ) { printf("[-]"); }
+        //else if ( grid[r]%2 ) { printf("-"); }
+        for ( ; c!=80; ++c ) {
+            if ( c==(int)(pred / scale) ) { printf("|"); }
+            printf(" ");
+        }
         printf("\n");
     }
     for ( int r=0; r!=NB_BINS+1; ++r ) {
